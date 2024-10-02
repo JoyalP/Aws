@@ -1,0 +1,17 @@
+- name: Checking warmpool instance state from appx ASG
+  shell: |
+    set -o pipefail
+    aws autoscaling describe-warm-pool --auto-scaling-group-name ...
+  args:
+    timeout: 300  # 300 seconds (5 minutes)
+  register: appx_warmpool_instances
+  failed_when: "{{ appx_warmpool_instances.stdout | from_json | map(attribute='LifecycleState') | join(',') | regex_findall('Terminating|Pending:Proceed') | length }} > 0"
+
+- name: Checking warmpool instance state from appx ASG
+  shell: |
+    set -o pipefail
+    aws autoscaling describe-warm-pool --auto-scaling-group-name ...
+  register: appx_warmpool_instances
+  ignore_errors: yes
+  failed_when: "{{ appx_warmpool_instances.stdout | from_json | map(attribute='LifecycleState') | join(',') | regex_findall('Terminating|Pending:Proceed') | length }} > 0"
+
