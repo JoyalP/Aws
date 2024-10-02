@@ -15,3 +15,68 @@
   ignore_errors: yes
   failed_when: "{{ appx_warmpool_instances.stdout | from_json | map(attribute='LifecycleState') | join(',') | regex_findall('Terminating|Pending:Proceed') | length }} > 0"
 
+-
+  hosts: mgmt_deployment_server
+  gather_facts: no
+  tasks:
+    - include_tasks: "{{ playbook_dir }}/.imported_roles/assume-aws-role/tasks/assume_aws_role.yml"
+
+    - name: Checking warmpool instance state from appx ASG
+      shell: |
+        set -e -o pipefail
+        aws autoscaling describe-warm-pool --auto-scaling-group-name ffm-{{jenkinsfile_parameter_tower}}-{{jenkinsfile_parameter_env_color}}-{{jenkinsfile_parameter_environment}}-app-appx-asg --region us-east-1 | jq '.Instances | map(.LifecycleState)'
+      args:
+        timeout: 300
+      register: appx_warmpool_instances
+      environment:
+        AWS_ACCESS_KEY_ID: "{{assumed_role.sts_creds.access_key}}"
+        AWS_SECRET_ACCESS_KEY: "{{assumed_role.sts_creds.secret_key}}"
+        AWS_SESSION_TOKEN: "{{ assumed_role.sts_creds.session_token }}"
+      failed_when: "{{ appx_warmpool_instances.stdout | from_json | map(attribute='LifecycleState') | join(',') | regex_findall('Terminating|Pending:Proceed') | length }} > 0"
+
+    - name: output appx warmpool instance state
+      debug:
+        msg:
+          - "Appx Warmpool instances: {{ appx_warmpool_instances.stdout | from_json }}"
+
+    - name: Checking warmpool instance state from apix ASG
+      shell: |
+        set -e -o pipefail
+        aws autoscaling describe-warm-pool --auto-scaling-group-name ffm-{{jenkinsfile_parameter_tower}}-{{jenkinsfile_parameter_env_color}}-{{jenkinsfile_parameter_environment}}-web-apix-asg --region us-east-1 | jq '.Instances | map(.LifecycleState)'
+      args:
+        timeout: 300
+      register: apix_warmpool_instances
+      environment:
+        AWS_ACCESS_KEY_ID: "{{assumed_role.sts_creds.access_key}}"
+        AWS_SECRET_ACCESS_KEY: "{{assumed_role.sts_creds.secret_key}}"
+        AWS_SESSION_TOKEN: "{{ assumed_role.sts_creds.session_token }}"
+      failed_when: "{{ apix_warmpool_instances.stdout | from_json | map(attribute='LifecycleState') | join(',') | regex_findall('Terminating|Pending:Proceed') | length }} > 0"
+
+    - name: output apix warmpool instance state
+      debug:
+        msg:
+          - "Apix Warmpool instances: {{ apix_warmpool_instances.stdout | from_json }}"
+
+    - name: Checking instance state from all ASGs
+      ec2_asg_info:
+        name: "ffm-{{jenkinsfile_parameter_tower}}-{{ jenkinsfile_parameter_env_color }}-{{ jenkinsfile_parameter_environment }}"
+        region: us-east-1
+        aws_access_key: "{{ assumed_role.sts_creds.access_key }}"
+        aws_secret_key: "{{ assumed_role.sts_creds.secret_key }}"
+        session_token: "{{ assumed_role.sts_creds.session_token }}"
+      register: asgs
+
+    - name: output all instance lifecyle states
+      debug:
+        msg:
+          - "{{ asgs.results | selectattr('instances') | map(attribute='instances') | flatten | map(attribute='lifecycle_state') | list }}"
+
+    - name: Checking instance state from all ASGs
+      ec2_asg_info:
+        name: "ffm-{{jenkinsfile_parameter_tower}}-{{ jenkinsfile_parameter_env_color }}-{{ jenkinsfile_parameter_environment }}"
+        region: us-east-1
+        aws_access_key: "{{ assumed_role.sts_creds.access_key }}"
+        aws_secret_key: "{{ assumed_role.sts_creds.secret_key }}"
+        session_token: "{{ assumed_role.sts_creds.session_token }}"
+      register: asgs
+      failed_when: (asgs.results | selectattr('instances') | map(attribute='instances') | flatten | map(attribute='lifecycle_state') | join(',') | regex_findall('Pending|Terminat|Detach|EnteringStandby') | length) > 0
