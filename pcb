@@ -1,0 +1,4 @@
+failed_when: 
+  (asgs.results | selectattr('instances') | map(attribute='instances') | flatten | map(attribute='lifecycle_state') | join(',') | regex_findall('Pending|Terminat|Detach|EnteringStandby') | length) > 0 
+  and 
+  (asgs.results | selectattr('instances') | map(attribute='instances') | flatten | map(attribute='lifecycle_state') | join(',') | regex_findall('InService') | length) == 0
