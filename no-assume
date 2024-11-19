@@ -1,0 +1,34 @@
+- hosts: all
+  gather_facts: false
+  vars:
+    region: us-east-1
+
+  tasks:
+    - name: Gather information about instances with a specific name
+      amazon.aws.ec2_instance_info:
+        region: "{{ region }}"
+        filters:
+          "tag:Name": "elka.dvd*"
+          instance-state-name: "running"
+      register: ec2_node_info
+
+    - name: Display kernel version for each instance
+      shell: uname -r
+      register: kernel_version
+      delegate_to: "{{ item.public_ip_address }}"
+      loop: "{{ ec2_node_info.instances }}"
+      when: ec2_node_info.instances is defined and ec2_node_info.instances | length > 0
+
+    - name: Print kernel version
+      debug:
+        msg: "Kernel version: {{ kernel_version.stdout.strip() }}"
+
+    - name: Ensure kernel version as a tag on Kafka instances
+      amazon.aws.ec2_tag:
+        region: "{{ region }}"
+        state: present
+        resource: "{{ item.instance_id }}"
+        tags:
+          KernelVersion: "{{ kernel_version.stdout.strip() }}"
+      loop: "{{ ec2_node_info.instances }}"
+      when: kernel_version is defined
