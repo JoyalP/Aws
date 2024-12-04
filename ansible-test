@@ -1,0 +1,43 @@
+- hosts: all
+  remote_user: 
+  become: true
+  become_user: root
+  gather_facts: false
+  vars:
+    region: us-east-1
+    ansible_python_interpreter: /bin/python3
+
+  tasks:
+    - name: Gather information about any instance with name beginning with elka.dvd
+      amazon.aws.ec2_instance_info:
+        region: "{{ region }}"
+        filters:
+          "tag:Name": "elka.dvd*"
+          instance-state-name: "running"
+      register: ec2_node_info
+
+    - name: Debug EC2 instance info
+      debug:
+        var: ec2_node_info
+
+    - name: Display kernel version for each instance
+      shell: uname -r
+      register: kernel_version
+      delegate_to: "{{ item.public_ip_address | default(item.private_ip_address) }}"
+      loop: "{{ ec2_node_info.instances }}"
+      when: ec2_node_info.instances is defined and ec2_node_info.instances | length > 0
+      ignore_errors: true
+
+    - name: Print the kernel version
+      debug:
+        msg: "{{ kernel_version.stdout.strip() if kernel_version is defined and 'stdout' in kernel_version else 'No kernel version found' }}"
+
+    - name: Ensure kernel version as a tag is present on Kafka instances
+      amazon.aws.ec2_tag:
+        region: "{{ region }}"
+        state: present
+        resource: "{{ item['instance_id'] }}"
+        tags:
+          KernelVersion: "{{ kernel_version.stdout.strip() if kernel_version is defined and 'stdout' in kernel_version else 'No kernel version found' }}"
+      loop: "{{ ec2_node_info.instances }}"
+      when: item['instance_id'] is defined
