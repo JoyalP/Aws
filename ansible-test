@@ -1,7 +1,5 @@
-- hosts: all
-  remote_user: 
-  become: true
-  become_user: root
+- hosts: localhost
+  connection: local
   gather_facts: false
   vars:
     region: us-east-1
@@ -16,10 +14,6 @@
           instance-state-name: "running"
       register: ec2_node_info
 
-    - name: Debug EC2 instance info
-      debug:
-        var: ec2_node_info
-
     - name: Fail if no instances found
       fail:
         msg: "No instances found with the tag hostname starting with e1kabdvd in region {{ region }}"
@@ -28,16 +22,13 @@
     - name: Display kernel version for each instance
       shell: uname -r
       register: kernel_version
+      remote_user: p5us
       delegate_to: "{{ item.public_ip_address | default(item.private_ip_address) }}"
       loop: "{{ ec2_node_info.instances }}"
       when: ec2_node_info.instances | length > 0
       ignore_errors: true
 
-    - name: Print the kernel version
-      debug:
-        msg: "{{ kernel_version.stdout.strip() if kernel_version is defined and 'stdout' in kernel_version else 'No kernel version found' }}"
-
-    - name: Ensure kernel version as a tag is present on Kafka instances
+    - name: Tag instances with their kernel version
       amazon.aws.ec2_tag:
         region: "{{ region }}"
         state: present
