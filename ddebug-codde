@@ -37,7 +37,11 @@
       set_fact:
         ec2_instances_with_kernel: "{{ ec2_instances_with_kernel | default([]) + [{'instance_id': item.instance_id, 'kernel_version': (kernel_version.stdout.strip() if kernel_version is defined and 'stdout' in kernel_version else 'No kernel version found')}] }}"
       loop: "{{ ec2_node_info.instances }}"
-      when: kernel_version is defined and kernel_version.stdout is defined
+      when: kernel_version is defined
+
+    - name: Debug ec2_instances_with_kernel
+      debug:
+        var: ec2_instances_with_kernel
 
     - name: Tag instances with their kernel version
       amazon.aws.ec2_tag:
@@ -47,4 +51,3 @@
         tags:
           KernelVersion: "{{ item.kernel_version }}"
       loop: "{{ ec2_instances_with_kernel }}"
-      when: item.kernel_version is defined
