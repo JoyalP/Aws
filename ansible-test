@@ -6,17 +6,17 @@
     ansible_python_interpreter: /bin/python3
 
   tasks:
-    - name: Gather information about any instance with hostname starting with e1kabdvd
+    - name: Gather information about any instance with hostname starting with elkabdvd
       amazon.aws.ec2_instance_info:
         region: "{{ region }}"
         filters:
-          "tag:hostname": "e1kabdvd*"
+          "tag:hostname": "elkabdvd*"
           instance-state-name: "running"
       register: ec2_node_info
 
     - name: Fail if no instances found
       fail:
-        msg: "No instances found with the tag hostname starting with e1kabdvd in region {{ region }}"
+        msg: "No instances found with the tag hostname starting with elkabdvd in region {{ region }}"
       when: ec2_node_info.instances | length == 0
 
     - name: Display kernel version for each instance
@@ -28,12 +28,18 @@
       when: ec2_node_info.instances | length > 0
       ignore_errors: true
 
+    - name: Append kernel version to instance data
+      set_fact:
+        ec2_instances_with_kernel: "{{ ec2_instances_with_kernel | default([]) + [{'instance_id': item.instance_id, 'kernel_version': kernel_version.stdout.strip() if 'stdout' in kernel_version else 'No kernel version found'}] }}"
+      loop: "{{ ec2_node_info.instances }}"
+      when: kernel_version is defined
+
     - name: Tag instances with their kernel version
       amazon.aws.ec2_tag:
         region: "{{ region }}"
         state: present
-        resource: "{{ item['instance_id'] }}"
+        resource: "{{ item.instance_id }}"
         tags:
-          KernelVersion: "{{ kernel_version.stdout.strip() if kernel_version is defined and 'stdout' in kernel_version else 'No kernel version found' }}"
-      loop: "{{ ec2_node_info.instances }}"
-      when: ec2_node_info.instances | length > 0 and item['instance_id'] is defined
+          KernelVersion: "{{ item.kernel_version }}"
+      loop: "{{ ec2_instances_with_kernel }}"
+      when: item.kernel_version is defined
