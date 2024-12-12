@@ -20,11 +20,6 @@
         msg: "No instances found with the tag hostname starting with elkabdvd in region {{ region }}"
       when: ec2_node_info.instances | length == 0
 
-    - name: Debug instance being delegated
-      debug:
-        msg: "Running uname -r on {{ item.public_ip_address | default(item.private_ip_address) }}"
-      loop: "{{ ec2_node_info.instances }}"
-
     - name: Display kernel version for each instance
       shell: uname -r
       register: kernel_version
@@ -35,19 +30,24 @@
       when: ec2_node_info.instances | length > 0
       ignore_errors: true
 
-    - name: Debug kernel version output
+    - name: Debug kernel version
       debug:
-        var: kernel_version
+        msg: "Kernel version for instance {{ item.instance_id }}: {{ kernel_version.stdout if kernel_version is defined else 'Not defined' }}"
+      loop: "{{ ec2_node_info.instances }}"
 
     - name: Append kernel version to instance data
       set_fact:
-        ec2_instances_with_kernel: "{{ ec2_instances_with_kernel | default([]) + [{'instance_id': item.instance_id, 'kernel_version': (kernel_version.stdout.strip() if kernel_version is defined and 'stdout' in kernel_version else 'No kernel version found')}] }}"
+        ec2_instances_with_kernel: "{{ ec2_instances_with_kernel | default([]) + [{'instance_id': item.instance_id, 'kernel_version': kernel_version.stdout if kernel_version is defined else 'No kernel version found'}] }}"
       loop: "{{ ec2_node_info.instances }}"
-      when: kernel_version is defined and kernel_version.stdout is defined
 
     - name: Debug ec2_instances_with_kernel
       debug:
         var: ec2_instances_with_kernel
+
+    - name: Fail if no instances have kernel data
+      fail:
+        msg: "No instances with valid kernel data found"
+      when: ec2_instances_with_kernel | length == 0
 
     - name: Tag instances with their kernel version
       amazon.aws.ec2_tag:
