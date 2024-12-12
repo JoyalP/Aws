@@ -35,12 +35,12 @@
     # Step 3: Map kernel versions to instance data
     - name: Map kernel versions to instance data
       set_fact:
-        ec2_instances_with_kernel: "{{ ec2_instances_with_kernel + [{'instance_id': item.instance_id, 'kernel_version': (result.stdout.strip() if 'stdout' in result else 'No kernel version found')}] }}"
+        ec2_instances_with_kernel: "{{ ec2_instances_with_kernel + [{'instance_id': item.instance_id, 'kernel_version': (kernel_result.results[loop.index].stdout.strip() if kernel_result.results[loop.index].stdout is defined else 'No kernel version found')}] }}"
       loop: "{{ ec2_node_info.instances }}"
       loop_control:
+        index_var: loop_index
         label: "{{ item.instance_id }}"
-      vars:
-        result: "{{ kernel_result.results[loop.index0] }}"
+      when: kernel_result.results | length > loop_index
 
     # Step 4: Debug collected kernel versions
     - name: Debug ec2_instances_with_kernel
