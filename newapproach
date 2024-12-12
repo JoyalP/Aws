@@ -32,26 +32,29 @@
       when: ec2_node_info.instances | length > 0
       ignore_errors: true
 
+    - name: Debug kernel_result structure
+      debug:
+        var: kernel_result.results
+
     # Step 3: Map Kernel Versions to Instances
     - name: Map kernel versions to instance data
       set_fact:
-        ec2_instances_with_kernel: "{{ ec2_instances_with_kernel + [{'instance_id': item.instance_id, 'kernel_version': (item.result.stdout.split(' ')[2] if 'stdout' in item.result and item.result.stdout else 'No kernel version found')}] }}"
+        ec2_instances_with_kernel: "{{ ec2_instances_with_kernel + [{'instance_id': item.instance_id, 'kernel_version': (result.stdout.split(' ')[2] if 'stdout' in result and result.stdout else 'No kernel version found')}] }}"
       loop: "{{ ec2_node_info.instances }}"
       vars:
-        item.result: "{{ kernel_result.results[loop.index0] }}"
+        result: "{{ kernel_result.results | selectattr('item.instance_id', 'equalto', item.instance_id) | first }}"
 
-    # Step 4: Debug Collected Kernel Versions
     - name: Debug ec2_instances_with_kernel
       debug:
         var: ec2_instances_with_kernel
 
-    # Step 5: Fail if No Valid Kernel Data is Found
+    # Step 4: Fail if No Valid Kernel Data is Found
     - name: Fail if no instances have valid kernel data
       fail:
         msg: "No instances with valid kernel data found"
       when: ec2_instances_with_kernel | length == 0
 
-    # Step 6: Tag Instances with Kernel Versions
+    # Step 5: Tag Instances with Kernel Versions
     - name: Tag instances with their kernel version
       amazon.aws.ec2_tag:
         region: "{{ region }}"
